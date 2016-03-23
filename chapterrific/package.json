@@ -1,0 +1,19 @@
+{
+  "name": "chapterrific",
+  "version": "0.0.1",
+  "description": "Concatenates MP4 files into one (with chapter markers) using a combination of tools from FFmpeg, GPAC and AtomicParsley.",
+  "main": "chapterrific.js",
+  "dependencies": {
+    "xmldom": "^0.1.22"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "start": "node chapterrific.js"
+  },
+  "author": "Michael Trenholm-Boyle",
+  "license": "MIT",
+  "repository": {
+	  "type": "git",
+	  "url": "https://github.com/mjtb/adhoc-nodejs-mp4-tools"
+  }
+}
