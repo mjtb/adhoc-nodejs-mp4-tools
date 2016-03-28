@@ -1,0 +1,19 @@
+{
+  "name": "episodium",
+  "version": "0.0.1",
+  "description": "Renames MP4 files and adds metadata according to series/episode scheme.",
+  "main": "episodium.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mjtb/adhoc-nodejs-mp4-tools.git"
+  },
+  "author": "Michael Trenholm-Boyle",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/mjtb/adhoc-nodejs-mp4-tools/issues"
+  },
+  "homepage": "https://github.com/mjtb/adhoc-nodejs-mp4-tools#readme"
+}
