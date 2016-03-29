@@ -38,7 +38,7 @@ function formatArgv(arg) {
 		args = [ arg ];
 	}
 	for(var i = 0; i < args.length; ++i) {
-		var a = args[i];
+		var a = String(args[i]);
 		if(i > 0) {
 			rv += ' ';
 		}
