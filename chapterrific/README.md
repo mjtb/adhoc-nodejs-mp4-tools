@@ -19,6 +19,10 @@ with the following format:
 	"artist": "optional; self-evident",
 	"artwork": "optional-artwork.jpg",
 	"source": "see_note_below-${title}.mp4",
+	"tvsh": "optional; TV Show Name",
+	"tvsn": 0,
+	"tven": 0,
+	"tves": "optional; TV Episode Name",
 	"chapters": [
 		{
 			"title": 1,
@@ -30,9 +34,16 @@ with the following format:
 
 If chapter files are named according to a pattern that incorporates a DVD title number then set the
 `source` property at the root to the filename pattern. The pattern illustrated above is typically of
-what the popular [Handbrake]() utility produces. If there is no such general pattern for the source
+what the popular [Handbrake](http://www.handbrake.fr/) utility produces. If there is no such general pattern for the source
 files, you can omit the `source` property at the root and instead specify the per-chapter file names
 with a `source` property on the individual chapters.
+
+If the `tvsh` property is set then it will be used for the `tvsh` box, which is used to record a TV
+show’s series name. If the `tvsn` property is set to a non-zero number then it will be used for the
+`tvsn` box,  which stores the TV show’s season number. If the `tves` property is set then it will be
+used for the `tves` box, which is used to record the title of a particular episode of a TV show. If
+the `tven` property is set then it will be used for the `tven` box, which is used to record the
+epsiode number (within its season) of a particular episode.
 
 Files are concatenated according to the order given in the `chatpers` array and the value of each
 chapters `title` number is not used to sort the files. The final file will be an MP4 file using the

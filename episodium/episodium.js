@@ -2,6 +2,7 @@ var child_process = require('child_process');
 var fs = require('fs');
 var path = require('path');
 var os = require('os');
+var format_argv = require('../shared/format_argv');
 
 function fsExistsFileSync(fn) {
 	try {
@@ -17,59 +18,6 @@ function twoDigit(n) {
 	} else {
 		return '0' + String(n);
 	}
-}
-function formatArgv(arg) {
-	var o = os.platform().toLowerCase();
-	var quot = [], esc = [], ech = '';
-	if(o === 'win32' || o === 'win64') {
-		esc = [ '^', '\"', '%' ];
-		quot = [ ' ', '/', '^', '|', '<', '>', '&', '?', '*', '(', ')', '%', '\"', '\'', '!' ];
-		ech = '^';
-	} else {
-		quot = [' ', '<', '>', '|', '?', '*', '(', ')', '&'];
-		ecs = ['\\', '\'', '\"'];
-		ech = '\\';
-	}
-	var rv = '';
-	var args;
-	if(Array.isArray(arg)) {
-		args = arg;
-	} else {
-		args = [ arg ];
-	}
-	for(var i = 0; i < args.length; ++i) {
-		var a = String(args[i]);
-		if(i > 0) {
-			rv += ' ';
-		}
-		var quote = false;
-		for(var j = 0; j < a.length; ++j) {
-			var c = a.charAt(j);
-			for(var k = 0; k < quot.length; ++k) {
-				if(c === quot[k]) {
-					quote = true;
-					break;
-				}
-			}
-		}
-		if(quote) {
-			rv += '\"';
-		}
-		for(var j = 0; j < a.length; ++j) {
-			var c = a.charAt(j);
-			for(var k = 0; k < esc.length; ++k) {
-				if(c === esc[k]) {
-					rv += ech;
-					break;
-				}
-			}
-			rv += c;
-		}
-		if(quote) {
-			rv += '\"';
-		}
-	}
-	return rv;
 }
 var dbfn = path.join(process.cwd(), "db.json");
 if(process.argv.length > 2)  {
@@ -147,7 +95,7 @@ for(var i = 0; i < db.length; ++i) {
 			args.push(episode);
 		}
 		try {
-			console.log('atomicparsley ' + formatArgv(args));
+			console.log('atomicparsley ' + format_argv(args));
 			if(!dryrun) {
 				var ps = child_process.spawnSync('atomicparsley', args, {'stdio': ['ignore', 'pipe', 'pipe'], 'encoding': 'utf8'});
 				if(!ps || ps.error || ps.status) {
@@ -157,21 +105,21 @@ for(var i = 0; i < db.length; ++i) {
 		} catch(err) {
 			console.log(err);
 		}
-		console.log('mv ' + formatArgv(src) + ' ' + formatArgv(bak));
+		console.log('mv ' + format_argv(src) + ' ' + format_argv(bak));
 		if(!dryrun) {
 			fs.renameSync(src, bak);
 		}
 		if(fsExistsFileSync(dst)) {
-			console.log('rm ' + formatArgv(dst));
+			console.log('rm ' + format_argv(dst));
 			if(!dryrun) {
 				fs.unlinkSync(dst);
 			}
 		}
-		console.log('mv ' + formatArgv(tmp) + ' ' + formatArgv(dst));
+		console.log('mv ' + format_argv(tmp) + ' ' + format_argv(dst));
 		if(!dryrun) {
 			fs.renameSync(tmp, dst);
 		}
-		console.log('rm ' + formatArgv(bak));
+		console.log('rm ' + format_argv(bak));
 		if(!dryrun) {
 			fs.unlinkSync(bak);
 		}
