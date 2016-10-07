@@ -1,0 +1,19 @@
+{
+  "name": "mixtapes",
+  "version": "0.0.1",
+  "description": "Remixes portions of MP4 files.",
+  "main": "mixtapes.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Michael Trenholm-Boyle",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mjtb/adhoc-nodejs-mp4-tools"
+  },
+  "dependencies": {
+    "fs-extra": "^0.30.0",
+    "xmldom": "^0.1.22"
+  }
+}

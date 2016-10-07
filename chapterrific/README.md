@@ -18,6 +18,7 @@ with the following format:
 	"album": "this will be the feature title and filename",
 	"artist": "optional; self-evident",
 	"artwork": "optional-artwork.jpg",
+	"audiobook": false,
 	"source": "see_note_below-${title}.mp4",
 	"tvsh": "optional; TV Show Name",
 	"tvsn": 0,
@@ -52,6 +53,8 @@ chapters `title` number is not used to sort the files. The final file will be an
 File names in the `db.json` file are relative to the `db.json` file itself. By default, Chapterrific
 looks for a file named `db.json` in same directory as chapterrific.js itself but this can be
 overridden by passing the file path a command-line argument.
+
+When processing audio-only files, be sure to set the `audiobook` property to true.
 
 If successful, exits with status code 0. Nothing is printed to the console.
 

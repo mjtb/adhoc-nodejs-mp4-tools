@@ -96,52 +96,68 @@ for(var DBi = 0; DBi < DB.length; ++DBi) {
 	}
 
 	// Determine the starting keyframes of each chapter to be using ffprobe.
-	var read_intervals = [];
-	for(var i = 0; i < db.chapters.length; ++i) {
-		if(!db.chapters[i].hasOwnProperty('start')) {
-			if(i == 0) {
-				db.chapters[i].start = 0;
-			} else {
-				var start = 0;
-				for(var j = 0; j < i; ++j) {
-					start += db.chapters[j].duration;
+	if(!db.audiobook) {
+		var read_intervals = [];
+		for(var i = 0; i < db.chapters.length; ++i) {
+			if(!db.chapters[i].hasOwnProperty('start')) {
+				if(i == 0) {
+					db.chapters[i].start = 0;
+				} else {
+					var start = 0;
+					for(var j = 0; j < i; ++j) {
+						start += db.chapters[j].duration;
+					}
+					read_intervals.push(Math.max(0, start - 20).toFixed(3) + '%+40');
 				}
-				read_intervals.push(Math.max(0, start - 20).toFixed(3) + '%+40');
 			}
 		}
-	}
-	if(read_intervals.length > 0) {
-		var args = [ '-i', path.resolve(_dbdir, db.destination), '-print_format', 'csv', '-show_frames', '-read_intervals', read_intervals.join(',') ];
-		console.log('ffprobe ' + format_argv(args));
-		var rv = child_process.spawnSync('ffprobe', args, { stdio: [ 'ignore', 'pipe', 'pipe'], encoding: 'utf8'});
-		if(!rv || rv.error || rv.status) {
-			console.log(rv);
-			process.exit(1);
-		}
-		var re = /^frame,video,.,1,\d+,([0-9.]+),/gm;
-		var keyframes = [];
-		var input = String(rv.stdout);
-		for(var rm = re.exec(input); rm !== null; rm = re.exec(input)) {
-			keyframes.push(Number(rm[1]));
-		}
-		for(var i = 1; i < db.chapters.length; ++i) {
-			if(!db.chapters[i].hasOwnProperty('start')) {
-				var start = 0;
-				for(var j = 0; j < i; ++j) {
-					start += db.chapters[j].duration;
-				}
-				var index = 0;
-				var delta = Math.abs(keyframes[index] - start);
-				for(var j = 1; j < keyframes.length; ++j) {
-					var d = Math.abs(keyframes[j] - start);
-					if(d < delta) {
-						index = j;
-						delta = d;
-					} else {
-						break;
+		if(read_intervals.length > 0) {
+			var args = [ '-i', path.resolve(_dbdir, db.destination), '-print_format', 'csv', '-show_frames', '-read_intervals', read_intervals.join(',') ];
+			console.log('ffprobe ' + format_argv(args));
+			var rv = child_process.spawnSync('ffprobe', args, { stdio: [ 'ignore', 'pipe', 'pipe'], encoding: 'utf8'});
+			if(!rv || rv.error || rv.status) {
+				console.log(rv);
+				process.exit(1);
+			}
+			var re = /^frame,video,.,1,\d+,([0-9.]+),/gm;
+			var keyframes = [];
+			var input = String(rv.stdout);
+			for(var rm = re.exec(input); rm !== null; rm = re.exec(input)) {
+				keyframes.push(Number(rm[1]));
+			}
+			for(var i = 1; i < db.chapters.length; ++i) {
+				if(!db.chapters[i].hasOwnProperty('start')) {
+					var start = 0;
+					for(var j = 0; j < i; ++j) {
+						start += db.chapters[j].duration;
 					}
+					var index = 0;
+					var delta = Math.abs(keyframes[index] - start);
+					for(var j = 1; j < keyframes.length; ++j) {
+						var d = Math.abs(keyframes[j] - start);
+						if(d < delta) {
+							index = j;
+							delta = d;
+						} else {
+							break;
+						}
+					}
+					db.chapters[i].start = keyframes[index];
 				}
-				db.chapters[i].start = keyframes[index];
+			}
+		}
+	} else {
+		for(var i = 0; i < db.chapters.length; ++i) {
+			if(!db.chapters[i].hasOwnProperty('start')) {
+				if(i == 0) {
+					db.chapters[i].start = 0;
+				} else {
+					var start = 0;
+					for(var j = 0; j < i; ++j) {
+						start += db.chapters[j].duration;
+					}
+					db.chapters[i].start = start;
+				}
 			}
 		}
 	}
@@ -201,7 +217,7 @@ for(var DBi = 0; DBi < DB.length; ++DBi) {
 		var dst = path.resolve(_dbdir, db.destination);
 		var tvar = String((new Date()).valueOf());
 		var tmp4 = path.join(_dbdir, `tmp-${tvar}.mp4`);
-		var args = [ '-ipod', '-add', `${dst}#video`, '-add', `${dst}#audio`, '-add', `${chapttxt}:chap`, tmp4];
+		var args = db.audiobook ? [ '-ipod', '-add', `${dst}#audio`, '-add', `${chapttxt}:chap`, tmp4 ] : [ '-ipod', '-add', `${dst}#video`, '-add', `${dst}#audio`, '-add', `${chapttxt}:chap`, tmp4 ];
 		console.log('mp4box ' + format_argv(args));
 		var rv = child_process.spawnSync('mp4box', args, { stdio: [ 'ignore', 'pipe', 'pipe'], encoding: 'utf8' });
 		fs.unlinkSync(chapttxt);

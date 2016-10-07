@@ -11,6 +11,8 @@ It includes:
 *	`chapterrific` — concatenates MP4 files into one (with chapter markers) using a combination of
 	tools from FFmpeg, GPAC and AtomicParsley.
 *	`episodium` — renames MP4 files and adds metadata using AtomicParsley.
+*	`mixtapes` — remix portions of MP4 files using a combination of tools from FFmpeg, GPAC and
+	AtomicParsley.
 
 # Building
 
