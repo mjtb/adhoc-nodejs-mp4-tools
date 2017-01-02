@@ -7,23 +7,29 @@ const format_argv = require('../shared/format_argv');
 
 function main() {
 	if(process.argv.length < 3 || process.argv[2] === "--help") {
-		console.error('syntax: node mixtapes.js path-to-db.json');
+		console.error('syntax: node mixtapes.js path-to-db.json [--debug]');
 	} else {
 		var filename = path.resolve(process.argv[2]);
+		var debug_mode = (process.argv.length > 3) && (process.argv[3] === '--debug');
 		var err;
 		try {
 			var tmp = fs.mkdtempSync(os.tmpdir() + '/mixtapes-' + String((new Date()).valueOf()));
 			console.log(`Using temporary folder: ${tmp}…`);
 			var db = readDbJson(filename);
 			var dir = path.dirname(filename);
-			fillInMissingInputChapterInfo(db, dir);
+			fillInMissingInputChapterInfo(db, dir, tmp);
+			fs.writeFileSync(path.resolve(tmp, 'db.json'), JSON.stringify(db, null, 4));
 			decomposeInputs(db, tmp);
 			composeOutputs(db, dir, tmp);
 		} catch(e) {
 			err = e;
 		} finally {
-			console.log(`Cleaning up temporary folder…`);
-			fs.removeSync(tmp);
+			if(!debug_mode) {
+				console.log(`Cleaning up temporary folder…`);
+				fs.removeSync(tmp);
+			} else {
+				console.log(`NOT cleaning up temporary folder becuase --debug was specified…`);
+			}
 		}
 		if(err) {
 			throw err;
@@ -42,11 +48,14 @@ function readDbJson(filename) {
 	return JSON.parse(data);
 }
 
-function fillInMissingInputChapterInfo(db, dir) {
+function fillInMissingInputChapterInfo(db, dir, tmp) {
 	for(var i = 0; i < db.inputs.length; ++i) {
 		var input = db.inputs[i];
 		input.file = path.resolve(dir, input.file);
 		var fch = getChaptersInFile(input.file);
+		if(tmp) {
+			fs.writeFileSync(path.resolve(tmp, 'chapters_in_file.json'), JSON.stringify(fch, null, 4));
+		}
 		for(var j = 0; j < input.chapters.length; ++j) {
 			var ch = input.chapters[j];
 			var chf = fch.find((e) => e.chapter === ch.chapter);
@@ -69,7 +78,7 @@ function fillInMissingInputChapterInfo(db, dir) {
 			}
 		}
 		if(!input['audiobook']) {
-			alignChapterStartsToKeyframes(input.file, input.chapters);
+			alignChapterStartsToKeyframes(input.file, input.chapters, tmp);
 		}
 		for(var j = 0; j < input.chapters.length; ++j) {
 			var ch = input.chapters[j];
@@ -90,7 +99,54 @@ function fillInMissingInputChapterInfo(db, dir) {
 				throw new Error(`db.json schema violation: input title ${input.title} (index: ${i}), chapter: ${ch.chapter} (index: ${j}): cannot determine chapter end`);
 			}
 		}
+		if(!input['audiobook']) {
+			if(!db.subtitles) {
+				db.subtitles = getSubtitles(input.file, input.chapters, tmp);
+			}
+		}
 	}
+}
+
+function getSubtitles(file, chapters, tmp) {
+	var rv = run_command('ffprobe', [ '-i', file ]);
+	var input = String(rv.stderr);
+	var re = /^\s*Stream\s+\#0\:(\d)\(eng\)\:\s+Subtitle\:\s+mov_text\s+\(tx3g\s+\/\s+0x67337874\)/gm;
+	var rm = re.exec(input);
+	if(!rm) {
+		return null;
+	}
+	var streamNumber = Number(rm[1]) + 1;
+	rv = run_command('mp4box', [ '-stdb', '-ttxt', streamNumber, file ]);
+	var input = String(rv.stdout);
+	if(tmp) {
+		fs.writeFileSync(path.resolve(tmp, path.basename(file, '.mp4') + '.ttxt'), input);
+	}
+	var doc = new xmldom.DOMParser().parseFromString(input);
+	var ts = doc.documentElement.getElementsByTagName('TextSample');
+	var samples = [];
+	var ser = new xmldom.XMLSerializer();
+	for(var i = 0; i < ts.length; ++i) {
+		var s = ts[i];
+		var t = parse_time(s.getAttribute('sampleTime'));
+		s.removeAttribute('sampleTime');
+		var rtx = ser.serializeToString(s).replace(/\r?\n/g, ' ');
+		var rex = /\<TextSample[^\>]*\>(.*)\<\/TextSample\>/.exec(rtx);
+		if(rex) {
+			samples.push({ 't': t, 'x': rex[1] });
+		}
+	}
+	for(var i = 0; i < chapters.length; ++i) {
+		var chapter = chapters[i];
+		chapter.subtitles = [];
+		for(var j = 0; j < samples.length; ++j) {
+			var s = samples[j];
+			if(s.t >= chapter.start && s.t <= chapter.end) {
+				chapter.subtitles.push({ 't': s.t - chapter.start, 'x': s.x });
+			}
+		}
+	}
+	var tsh = doc.documentElement.getElementsByTagName('TextStreamHeader')[0];
+	return ser.serializeToString(tsh);
 }
 
 function decomposeInputs(db, tmp) {
@@ -112,6 +168,7 @@ function composeOutputs(db, dir, tmp) {
 		console.log(`Composing output file: ${output.file}…`);
 		var files = [];
 		var st = 0;
+		var subtitles = [];
 		for(var j = 0; j < output.chapters.length; ++j) {
 			var outch = output.chapters[j];
 			var input = db.inputs.find((e) => e.title === outch.title);
@@ -126,25 +183,28 @@ function composeOutputs(db, dir, tmp) {
 			if(!outch.hasOwnProperty('name')) {
 				outch.name = inch.name;
 			}
+			if(inch.subtitles) {
+				for(var k = 0; k < inch.subtitles.length; ++k) {
+					var subt = inch.subtitles[k];
+					var hms = format_time(st + subt.t);
+					subtitles.push(`<TextSample sampleTime="${hms}" xml:space="preserve">${subt.x}</TextSample>`);
+				}
+			}
 			outch.start = st;
 			outch.duration = (inch.end - inch.start);
 			st += outch.duration;
 		}
-		var txt = path.resolve(tmp, 'concat-' + String((new Date()).valueOf()) + '.txt');
+		var txt = path.resolve(tmp, 'concat-' + i + '-' + String((new Date()).valueOf()) + '.txt');
 		fs.writeFileSync(txt, files.join('\n'));
 		var args = [ '-loglevel', 'fatal', '-y', '-f', 'concat', '-i', txt, '-c', 'copy', '-movflags', '+faststart', output.file ];
-		if(output.title) {
-			args.push('-metadata');
-			args.push(`title=${output.title}`);
-		}
-		if(output.author) {
-			args.push('-metadata');
-			args.push(`author=${output.author}`);
-		}
 		run_command('ffmpeg', args);
+		if(db.subtitles && subtitles.length > 0) {
+			output.subtitles = path.resolve(tmp, 'cc-' + i + '.ttxt');
+			fs.writeFileSync(output.subtitles, [ '<?xml version="1.0" encoding="UTF-8"?>', '<TextStream version="1.1">', db.subtitles ].concat(subtitles, [ '</TextStream>' ]).join('\n'));
+		}
 		addChapterMarkers(output, dir, tmp);
-		if(output.hasOwnProperty('artwork')) {
-			addArtwork(output.file, path.resolve(dir, output.artwork));
+		if(['title', 'author', 'artwork', 'series', 'season', 'episode'].some((x) => this.hasOwnProperty(x), output)) {
+			addMetadata(output, path, dir);
 		}
 	}
 }
@@ -192,16 +252,51 @@ function addChapterMarkers(output, dir, tmp) {
 	var chapttxt = path.resolve(tmp, `chapters-${tvar}.ttxt`);
 	fs.writeFileSync(chapttxt, ser.serializeToString(doc));
 	var tmp4 = path.join(dir, `tmp-${tvar}.mp4`);
-	run_command('mp4box', [ '-ipod', '-add', `${output.file}#video`, '-add', `${output.file}#audio`, '-add', `${chapttxt}:chap`, tmp4 ]);
+	var args = [ '-ipod', '-add', `${output.file}#video`, '-add', `${output.file}#audio`, '-add', `${chapttxt}:chap` ];
+	if(output.subtitles) {
+		args.push('-add');
+		args.push(output.subtitles + ':lang=eng');
+	}
+	args.push(tmp4);
+	run_command('mp4box', args);
 	var tmp42 = path.join(dir, `tmp-${tvar}-orig.mp4`);
 	fs.renameSync(output.file, tmp42);
 	fs.renameSync(tmp4, output.file);
 	fs.unlinkSync(tmp42);
 }
 
-function addArtwork(movie, artwork) {
-	console.log(`Ading artwork from file: ${artwork} to movie file: ${movie}…`);
-	run_command('atomicparsley', [ movie, "--overWrite", "--artwork", artwork ]);
+function addMetadata(output, path, dir) {
+	var movie = output.file;
+	var args = [ movie, '--overWrite' ];
+	if(output.hasOwnProperty('artwork')) {
+		var artwork = path.resolve(dir, output.artwork);
+		console.log(`Ading artwork from file: ${artwork} to movie file: ${movie}…`);
+		args.push('--artwork');
+		args.push(artwork);
+	}
+	if(output.hasOwnProperty('title')) {
+		args.push('--title');
+		args.push(output.title);
+	}
+	if(output.hasOwnProperty('author')) {
+		args.push('--artist');
+		args.push(output.author);
+	}
+	if(output.hasOwnProperty('season')) {
+		args.push('--TVSeasonNum');
+		args.push(output.season);
+	}
+	if(output.hasOwnProperty('episode')) {
+		args.push('--TVEpisodeNum');
+		args.push(output.episode);
+	}
+	if(output.hasOwnProperty('series')) {
+		args.push('--TVShowName');
+		args.push(output.series);
+		args.push('--stik');
+		args.push('TV Show');
+	}
+	run_command('atomicparsley', args);
 }
 
 function getChaptersInFile(filename) {
@@ -222,7 +317,7 @@ function getChaptersInFile(filename) {
 	return chapters;
 }
 
-function alignChapterStartsToKeyframes(filename, chapters) {
+function alignChapterStartsToKeyframes(filename, chapters, tmp) {
 	console.log(`Searching for keyframes nearest chapter markers in input file: ${filename}…`);
 	var read_intervals = [];
 	for(var i = 0; i < chapters.length; ++i) {
@@ -233,8 +328,20 @@ function alignChapterStartsToKeyframes(filename, chapters) {
 		var re = /^frame,video,.,1,\d+,([0-9.]+),/gm;
 		var keyframes = [];
 		var input = String(rv.stdout);
+		if(tmp) {
+			fs.writeFileSync(path.resolve(tmp, 'keyframes.txt'), input);
+		}
 		for(var rm = re.exec(input); rm !== null; rm = re.exec(input)) {
 			keyframes.push(Number(rm[1]));
+		}
+		keyframes.sort((a,b) => a - b);
+		for(var i = keyframes.length - 1; i > 0; --i) {
+			if(keyframes[i] === keyframes[i - 1]) {
+				keyframes.splice(i, 1);
+			}
+		}
+		if(tmp) {
+			fs.writeFileSync(path.resolve(tmp, 'keyframes.json'), JSON.stringify(keyframes, null, 4));
 		}
 		for(var i = 0; i < chapters.length; ++i) {
 			var index = 0;
@@ -260,7 +367,7 @@ function parse_time(t) {
 		return t;
 	} else {
 		var re = /([0-9]{2}):([0-9]{2}):([0-9]{2}\.[0-9]+)/;
-		var rx = re.exec(String(hms));
+		var rx = re.exec(String(t));
 		var h = Number(rx[1]), m = Number(rx[2]), s = Number(rx[3]);
 		return ((h * 60) + m) * 60 + s;
 	}

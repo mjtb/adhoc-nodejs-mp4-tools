@@ -37,6 +37,9 @@ class OutputSpec {
 	title?: string,
 	author?: string,
 	artwork?: string,
+	series?: string,
+	season?: number,
+	episode?: number,
 	chapters: OutputChapter[]
 }
 
@@ -66,6 +69,9 @@ input file (if any) is used.
 The `file` properties of `InputSpec` and `OutputSpec` are file paths. If relative, they are made
 absolute relative to the location of the input `db.json` file.
 
+If an `OutputSpec` has `series` defined, the `@stik` metadata will be automatically set to
+`TV Show`.
+
 
 ## Building
 
@@ -74,11 +80,13 @@ absolute relative to the location of the input `db.json` file.
 
 ## Running
 
-`node mixtapes.js path-to-db-json`
+`node mixtapes.js path-to-db-json [--debug]`
 
 If successful, exits with status code 0. If an error occurs, details of the error are printed to
 `stderr` and the process exits with status code 1.
 
+If `--debug` is specified the temporary folder created during processing is _not_ deleted. The
+contents thereof may be inspected to determine the cause for errors or incorrect output.
 
 ## Issues
 
