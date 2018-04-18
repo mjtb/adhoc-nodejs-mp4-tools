@@ -208,7 +208,7 @@ function composeOutputs(db, dir, tmp) {
 			fs.writeFileSync(output.subtitles, [ '<?xml version="1.0" encoding="UTF-8"?>', '<TextStream version="1.1">', db.subtitles ].concat(subtitles, [ '</TextStream>' ]).join('\n'));
 		}
 		addChapterMarkers(output, dir, tmp);
-		if(['title', 'author', 'artwork', 'series', 'season', 'episode'].some((x) => this.hasOwnProperty(x), output)) {
+		if(['title', 'author', 'artwork', 'series', 'season', 'episode'].some((x) => output.hasOwnProperty(x))) {
 			addMetadata(output, path, dir);
 		}
 	}
