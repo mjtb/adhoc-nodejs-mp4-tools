@@ -83,7 +83,7 @@ for(var DBi = 0; DBi < DB.length; ++DBi) {
 		}
 		fs.writeFileSync(filelist, concat);
 		var dst = db.album + '.mp4';
-		var args = [ '-f', 'concat', '-i', filelist, '-codec', 'copy', '-movflags', '+faststart', path.join(_dbdir, dst) ];
+		var args = [ '-f', 'concat', '-safe', '0', '-i', filelist, '-codec', 'copy', '-movflags', '+faststart', path.join(_dbdir, dst) ];
 		console.log('ffmpeg ' + format_argv(args));
 		var rv = child_process.spawnSync('ffmpeg', args, { stdio: [ 'ignore', 'pipe', 'pipe'], encoding: 'utf8'});
 		fs.unlinkSync(filelist);
@@ -161,6 +161,9 @@ for(var DBi = 0; DBi < DB.length; ++DBi) {
 			}
 		}
 	}
+	for(var i = 0; i < db.chapters.length; ++i) {
+		console.log(`chapter ${i + 1} start: ${db.chapters[i].start}, duration: ${db.chapters[i].duration}`);
+	}
 
 	// Add the chapter track using mp4box.
 	if(!db.hasOwnProperty('chaptered') || !db.chaptered) {
@@ -220,11 +223,11 @@ for(var DBi = 0; DBi < DB.length; ++DBi) {
 		var args = db.audiobook ? [ '-ipod', '-add', `${dst}#audio`, '-add', `${chapttxt}:chap`, tmp4 ] : [ '-ipod', '-add', `${dst}#video`, '-add', `${dst}#audio`, '-add', `${chapttxt}:chap`, tmp4 ];
 		console.log('mp4box ' + format_argv(args));
 		var rv = child_process.spawnSync('mp4box', args, { stdio: [ 'ignore', 'pipe', 'pipe'], encoding: 'utf8' });
-		fs.unlinkSync(chapttxt);
 		if(!rv || rv.error || rv.status) {
 			console.log(rv);
 			process.exit(1);
 		}
+		fs.unlinkSync(chapttxt);
 		var tmp42 = path.join(_dbdir, `tmp-${tvar}-orig.mp4`);
 		fs.renameSync(dst, tmp42);
 		fs.renameSync(tmp4, dst);
