@@ -156,7 +156,7 @@ function decomposeInputs(db, tmp) {
 		for(var j = 0; j < input.chapters.length; ++j) {
 			var chapter = input.chapters[j];
 			chapter.file = path.resolve(tmp, `t${i}-c${j}.mp4`);
-			run_command('ffmpeg', [ '-loglevel', 'fatal', '-i', input.file, '-codec', 'copy', '-ss', chapter.start, '-to', chapter.end, chapter.file ]);
+			run_command('ffmpeg', [ '-loglevel', 'fatal', '-ss', chapter.start, '-to', chapter.end, '-i', input.file, '-codec', 'copy', chapter.file ]);
 		}
 	}
 }
@@ -169,16 +169,18 @@ function composeOutputs(db, dir, tmp) {
 		var files = [];
 		var st = 0;
 		var subtitles = [];
+		var inches = [];
 		for(var j = 0; j < output.chapters.length; ++j) {
 			var outch = output.chapters[j];
 			var input = db.inputs.find((e) => e.title === outch.title);
 			if(!input) {
 				throw new Error(`db.json schema violation: output index: ${i}, chapter index: ${j} references non-existant input title #${outch.title}`);
-			}
+		 	}
 			var inch = input.chapters.find((e) => e.chapter === outch.chapter);
 			if(!inch) {
 				throw new Error(`db.json schema violation: output index: ${i}, chapter index: ${j} references non-existant chapter #${outch.chapter} of input title #${outch.title}`);
 			}
+			inches.push(inch.file);
 			files.push(`file '${inch.file}'`);
 			if(!outch.hasOwnProperty('name')) {
 				outch.name = inch.name;
@@ -196,8 +198,11 @@ function composeOutputs(db, dir, tmp) {
 		}
 		var txt = path.resolve(tmp, 'concat-' + i + '-' + String((new Date()).valueOf()) + '.txt');
 		fs.writeFileSync(txt, files.join('\n'));
-		var args = [ '-loglevel', 'fatal', '-y', '-f', 'concat', '-i', txt, '-c', 'copy', '-movflags', '+faststart', output.file ];
-		run_command('ffmpeg', args);
+		if(files.length > 1) {
+			run_command('ffmpeg', [ '-safe', '0', '-loglevel', 'fatal', '-y', '-f', 'concat', '-i', txt, '-c', 'copy', '-movflags', '+faststart', output.file ]);
+		} else {
+			run_command('ffmpeg', [ '-safe', '0', '-loglevel', 'fatal', '-y', '-i', inches[0], '-c', 'copy', '-movflags', '+faststart', output.file ]);
+		}
 		if(db.subtitles && subtitles.length > 0) {
 			output.subtitles = path.resolve(tmp, 'cc-' + i + '.ttxt');
 			fs.writeFileSync(output.subtitles, [ '<?xml version="1.0" encoding="UTF-8"?>', '<TextStream version="1.1">', db.subtitles ].concat(subtitles, [ '</TextStream>' ]).join('\n'));
@@ -324,10 +329,14 @@ function alignChapterStartsToKeyframes(filename, chapters, tmp) {
 		read_intervals.push(Math.max(0, chapters[i].start - 20).toFixed(3) + '%+40');
 	}
 	if(read_intervals.length > 0) {
-		var rv = run_command('ffprobe', [ '-i', filename, '-print_format', 'csv', '-show_frames', '-read_intervals', read_intervals.join(',') ]);
+		var inputs = [];
+		for(var ri = 0; ri < read_intervals.length; ++ri) {
+			var rv = run_command('ffprobe', [ '-i', filename, '-print_format', 'csv', '-show_frames', '-read_intervals', read_intervals[ri] ]);
+			inputs.push(String(rv.stdout));
+		}
 		var re = /^frame,video,.,1,\d+,([0-9.]+),/gm;
 		var keyframes = [];
-		var input = String(rv.stdout);
+		var input = inputs.join('\n');
 		if(tmp) {
 			fs.writeFileSync(path.resolve(tmp, 'keyframes.txt'), input);
 		}
@@ -344,19 +353,21 @@ function alignChapterStartsToKeyframes(filename, chapters, tmp) {
 			fs.writeFileSync(path.resolve(tmp, 'keyframes.json'), JSON.stringify(keyframes, null, 4));
 		}
 		for(var i = 0; i < chapters.length; ++i) {
-			var index = 0;
-			var delta = Math.abs(keyframes[index] - chapters[i].start);
-			for(var j = 1; j < keyframes.length; ++j) {
-				var d = Math.abs(keyframes[j] - chapters[i].start);
-				if(d < delta) {
-					index = j;
-					delta = d;
-				} else {
-					break;
+			if(chapters[i].start > 0) {
+				var index = 0;
+				var delta = Math.abs(keyframes[index] - chapters[i].start);
+				for(var j = 1; j < keyframes.length; ++j) {
+					var d = Math.abs(keyframes[j] - chapters[i].start);
+					if(d < delta) {
+						index = j;
+						delta = d;
+					} else {
+						break;
+					}
 				}
+				chapters[i].start = keyframes[index];
+				chapters[i].delta = delta;
 			}
-			chapters[i].start = keyframes[index];
-			chapters[i].delta = delta;
 		}
 	}
 	return chapters;
@@ -366,7 +377,7 @@ function parse_time(t) {
 	if(typeof(t) === "number") {
 		return t;
 	} else {
-		var re = /([0-9]{2}):([0-9]{2}):([0-9]{2}\.[0-9]+)/;
+		var re = /([0-9]{2}):([0-9]{2}):([0-9]{2}(?:\.[0-9]+)?)/;
 		var rx = re.exec(String(t));
 		var h = Number(rx[1]), m = Number(rx[2]), s = Number(rx[3]);
 		return ((h * 60) + m) * 60 + s;
