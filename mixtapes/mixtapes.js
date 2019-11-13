@@ -199,9 +199,9 @@ function composeOutputs(db, dir, tmp) {
 		var txt = path.resolve(tmp, 'concat-' + i + '-' + String((new Date()).valueOf()) + '.txt');
 		fs.writeFileSync(txt, files.join('\n'));
 		if(files.length > 1) {
-			run_command('ffmpeg', [ '-safe', '0', '-loglevel', 'fatal', '-y', '-f', 'concat', '-i', txt, '-c', 'copy', '-movflags', '+faststart', output.file ]);
+			run_command('ffmpeg', [ /* '-safe', '0', */ '-loglevel', 'fatal', '-y', '-f', 'concat', '-i', txt, '-c', 'copy', '-movflags', '+faststart', output.file ]);
 		} else {
-			run_command('ffmpeg', [ '-safe', '0', '-loglevel', 'fatal', '-y', '-i', inches[0], '-c', 'copy', '-movflags', '+faststart', output.file ]);
+			run_command('ffmpeg', [ /* '-safe', '0', */ '-loglevel', 'fatal', '-y', '-i', inches[0], '-c', 'copy', '-movflags', '+faststart', output.file ]);
 		}
 		if(db.subtitles && subtitles.length > 0) {
 			output.subtitles = path.resolve(tmp, 'cc-' + i + '.ttxt');
