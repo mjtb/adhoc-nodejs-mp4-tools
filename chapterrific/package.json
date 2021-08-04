@@ -4,7 +4,7 @@
   "description": "Concatenates MP4 files into one (with chapter markers) using a combination of tools from FFmpeg, GPAC and AtomicParsley.",
   "main": "chapterrific.js",
   "dependencies": {
-    "xmldom": "^0.1.22"
+    "xmldom": "^0.6.0"
   },
   "devDependencies": {},
   "scripts": {
